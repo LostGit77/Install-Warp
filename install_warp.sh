@@ -1,6 +1,6 @@
 #!/bin/bash
 # ===========================================
-# Скрипт установки Cloudflare WARP на сервер
+# Установка Cloudflare WARP (ТОЛЬКО PROXY)
 # ===========================================
 
 set -e
@@ -29,36 +29,34 @@ wait_for_dpkg_lock() {
     while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
           sudo fuser /var/lib/apt/lists/lock >/dev/null 2>&1 || \
           sudo fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
-        echo "[INFO] Ждем, пока другой процесс apt/dpkg завершится..."
+        print_msg info "Ждем завершения apt/dpkg..."
         sleep 5
     done
 }
 
-ask_yes_no() {
-    local prompt="$1"
+ask_warp_install() {
     local reply
     while true; do
-        # Жёлтый цвет для вопроса
-        read -r -p $'\e[33m'"$prompt (y/n): "$'\e[0m' reply
+        read -r -p $'\e[33mУстановить Cloudflare WARP в режиме SOCKS-прокси? (y/n): \e[0m' reply
         reply=$(echo "$reply" | tr 'A-Z' 'a-z')
         case "$reply" in
             y) return 0 ;;
             n) return 1 ;;
-            *) echo -e "\e[33mВведите y или n\e[0m" ;;
+            *) print_msg warn "Введите y или n" ;;
         esac
     done
 }
 
 install_warp_repo() {
-    print_msg info "Добавляем ключ репозитория Cloudflare..."
+    print_msg info "Добавляем ключ Cloudflare..."
     curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor \
         > /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
-    print_msg ok "Ключ Cloudflare добавлен"
 
     print_msg info "Добавляем репозиторий..."
     echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" \
         | tee /etc/apt/sources.list.d/cloudflare-client.list
-    print_msg ok "Репозиторий Cloudflare добавлен"
+
+    print_msg ok "Репозиторий добавлен"
 }
 
 install_warp_package() {
@@ -71,48 +69,44 @@ install_warp_package() {
 }
 
 register_warp() {
-    print_msg info "Регистрируем WARP клиент..."
+    print_msg info "Регистрируем WARP..."
     if ! warp-cli status | grep -q "Registered"; then
         echo y | script -q -c "warp-cli registration new" /dev/null
-        print_msg ok "WARP успешно зарегистрирован"
+        print_msg ok "WARP зарегистрирован"
     else
-        print_msg info "WARP уже зарегистрирован"
+        print_msg info "Уже зарегистрирован"
     fi
 }
 
 enable_warp_proxy() {
-    print_msg info "Включаем режим прокси..."
+    print_msg info "Включаем proxy режим..."
     warp-cli mode proxy
     warp-cli connect
-    print_msg ok "WARP подключен в режиме прокси"
-    echo -e "\n\e[33mНастройки SOCKS для WARP в Outbounds в 3x-ui панели:\nIP: 127.0.0.1\nPORT: 40000\e[0m\n"
-}
 
-enable_warp_vpn() {
-    print_msg info "Подключаем WARP в VPN режиме..."
-    warp-cli connect
-    print_msg ok "WARP подключен в VPN режиме"
+    print_msg ok "WARP работает в режиме SOCKS"
+
+    echo
+    print_msg warn "Настройки для 3x-ui:"
+    echo "IP:   127.0.0.1"
+    echo "PORT: 40000"
+    echo
 }
 
 setup_warp() {
     if check_warp_status; then
+        print_msg info "Пропускаем установку"
         return
     fi
 
-    if ! ask_yes_no "Установить Cloudflare WARP?"; then
-        print_msg info "Установка WARP пропущена пользователем"
+    if ! ask_warp_install; then
+        print_msg info "Отменено пользователем"
         return
     fi
 
     install_warp_repo
     install_warp_package
     register_warp
-
-    if ask_yes_no "Использовать WARP как SOCKS-прокси для панели 3x-ui (или 'n' для VPN режима):"; then
-        enable_warp_proxy
-    else
-        enable_warp_vpn
-    fi
+    enable_warp_proxy
 
     print_msg info "Статус WARP:"
     warp-cli status
