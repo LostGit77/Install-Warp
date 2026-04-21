@@ -7,10 +7,11 @@ sudo su -c "bash <(curl -Ls https://raw.githubusercontent.com/LostGit77/Install-
 
 ## 🌐 WARP Proxy в 3x-ui
 В панели перейти: Настройки Xray → Исходящие подключения → Создать подключение
-> Переместить его вверх
+
 ```
 ПРОТОКОЛ: Socks
 ТЕГ.....: WARP-CLI
 АДРЕС...: 127.0.0.1
 ПОРТ....: 40000
 ```
+> Переместить его вверх
